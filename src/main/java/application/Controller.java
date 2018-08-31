@@ -24,6 +24,15 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import com.sun.jna.Pointer;
+import com.sun.jna.platform.win32.User32;
+import com.sun.jna.platform.win32.WinDef.LPARAM;
+import com.sun.jna.platform.win32.WinDef.LRESULT;
+import com.sun.jna.platform.win32.WinDef.WPARAM;
+import com.sun.jna.platform.win32.WinUser;
+import com.sun.jna.platform.win32.WinUser.KBDLLHOOKSTRUCT;
+import com.sun.jna.platform.win32.WinUser.LowLevelKeyboardProc;
+
 import javafx.application.Platform;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
@@ -42,6 +51,7 @@ import javafx.scene.input.TransferMode;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import ts.entity.Person;
+import ts.win32.KeyHook;
 import ts.win32.TicketWin32;
 
 public class Controller implements Initializable {
@@ -106,6 +116,39 @@ public class Controller implements Initializable {
 			}).collect(Collectors.toList());
 			importFiles(files);
 		});
+		
+		new Thread(new KeyHook(new LowLevelKeyboardProc() {
+            @Override
+            public LRESULT callback(int nCode, WPARAM wParam, KBDLLHOOKSTRUCT info) {
+            	if (nCode >= 0) {
+                    switch(wParam.intValue()) {
+                    case WinUser.WM_KEYUP:
+                    case WinUser.WM_KEYDOWN:
+                    case WinUser.WM_SYSKEYUP:
+                    case WinUser.WM_SYSKEYDOWN:
+                        System.err.println("in callback, key=" + info.vkCode);
+                        if (info.vkCode == 35) {
+                            System.err.println("exit");
+                            User32.INSTANCE.UnhookWindowsHookEx(KeyHook.hhk);
+                            System.exit(0);
+                        }
+                        if(info.vkCode == 45) {
+                        	Platform.runLater(() -> {
+                        		start(null);
+            				});
+                        }
+                    }
+                }
+                Pointer ptr = info.getPointer();
+                long peer = Pointer.nativeValue(ptr);
+                return User32.INSTANCE.CallNextHookEx(KeyHook.hhk, nCode, wParam, new LPARAM(peer));
+            }
+        })).start();
+		
+		stage.setOnCloseRequest(e -> {
+			User32.INSTANCE.UnhookWindowsHookEx(KeyHook.hhk);
+			System.exit(0);
+		});
 	}
 	
 	public void start(ActionEvent event) {
@@ -119,19 +162,11 @@ public class Controller implements Initializable {
 				for (Person person : filterData) {
 					if(Thread.currentThread().isInterrupted())
 						break;
-					try {
-						Thread.sleep(1000);
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
 					
-					person.setStatus("成功");
-//					person.setStatus(TicketWin32.print(person));
-//					table.refresh();
+					person.setStatus(TicketWin32.print(person));
 				}
 				Platform.runLater(() -> {
 					btn_start.setText("开始");
-//					table.refresh();
 				});
 			});
 			scritpThread.start();

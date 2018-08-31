@@ -209,7 +209,6 @@ public class TicketWin32 {
 				
 				FNWNS380 = User32.INSTANCE.FindWindow("FNWNS380", "证件信息录入窗口");
 				boolean winVisible = User32.INSTANCE.IsWindowVisible(FNWNS380);
-//					System.out.println("winVisible:"+winVisible);
 				
 				if(lastVisible) {
 					System.out.println("录入窗口隐藏");
@@ -257,7 +256,7 @@ public class TicketWin32 {
 		}
 	}
 	
-public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Exception {
 		
 		HWND Notepad = User32.INSTANCE.FindWindow("Notepad", "无标题 - 记事本");
 		Win32.INSTANCE.SwitchToThisWindow(Notepad, true);

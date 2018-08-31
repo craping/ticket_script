@@ -5,6 +5,9 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.util.UUID;
+
+import ts.security.Coder;
 
 public interface AppInfo extends Serializable {
 	
@@ -18,9 +21,9 @@ public interface AppInfo extends Serializable {
 			byte[] mac = NetworkInterface.getByInetAddress(InetAddress.getLocalHost()).getHardwareAddress();
 			StringBuffer sb = new StringBuffer("");
 			for(int i=0; i<mac.length; i++) {
-				if(i!=0) {
+				/*if(i!=0) {
 					sb.append("-");
-				}
+				}*/
 				//字节转换为整数
 				int temp = mac[i]&0xff;
 				String str = Integer.toHexString(temp);
@@ -35,5 +38,10 @@ public interface AppInfo extends Serializable {
 			e.printStackTrace();
 		}
 		return "";
+	}
+	
+	public static void main(String[] args) {
+		String sn = AppInfo.mac() + UUID.randomUUID().toString().replaceAll("-", "");
+		System.out.println(Coder.encryptMD5(sn).toUpperCase());
 	}
 }
