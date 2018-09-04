@@ -1,5 +1,6 @@
 package ts.security;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -11,7 +12,6 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Provider;
-import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -138,11 +138,63 @@ public class RSA {
      * @return 密文数据
      */
     public static byte[] encrypt(Key key, String plaintext) throws Exception {
-        Cipher ci = Cipher.getInstance(ALGORITHOM, DEFAULT_PROVIDER);
-        ci.init(Cipher.ENCRYPT_MODE, key);
-        return ci.doFinal(plaintext.getBytes("utf-8"));
+        Cipher cipher = Cipher.getInstance(ALGORITHOM, DEFAULT_PROVIDER);
+        cipher.init(Cipher.ENCRYPT_MODE, key);
+        
+        byte[] cipherblock = plaintext.getBytes("utf-8");
+        int inputLen = cipherblock.length;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int offSet = 0;
+
+        for(int i = 0; inputLen - offSet > 0; offSet = i * 116) {
+            byte[] cache;
+            if(inputLen - offSet > 116) {
+                cache = cipher.doFinal(cipherblock, offSet, 116);
+            } else {
+                cache = cipher.doFinal(cipherblock, offSet, inputLen - offSet);
+            }
+
+            out.write(cache, 0, cache.length);
+            ++i;
+        }
+
+        byte[] encryptedData = out.toByteArray();
+        out.close();
+        return encryptedData;
     }
 
+    /**
+     * 加密数据
+     * 
+     * @param key 密钥
+     * @param plaintext 明文字符串
+     * @return 密文数据
+     */
+    public static byte[] encrypt(Key key, byte[] cipherblock) throws Exception {
+        Cipher cipher = Cipher.getInstance(ALGORITHOM, DEFAULT_PROVIDER);
+        cipher.init(Cipher.ENCRYPT_MODE, key);
+        
+        int inputLen = cipherblock.length;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int offSet = 0;
+
+        for(int i = 0; inputLen - offSet > 0; offSet = i * 116) {
+            byte[] cache;
+            if(inputLen - offSet > 116) {
+                cache = cipher.doFinal(cipherblock, offSet, 116);
+            } else {
+                cache = cipher.doFinal(cipherblock, offSet, inputLen - offSet);
+            }
+
+            out.write(cache, 0, cache.length);
+            ++i;
+        }
+
+        byte[] encryptedData = out.toByteArray();
+        out.close();
+        return encryptedData;
+    }
+    
     /**
      * 加密数据。
      * 
@@ -166,7 +218,28 @@ public class RSA {
 		return encrypt(key, plaintext);
 	}	
 	
-    
+	 /**
+     * 加密数据。
+     * 
+     * @param keyStr 密钥字符串
+     * @param plaintext 明文字符串
+     * @param keyType 密钥类型
+     * @return 密文数据
+     */
+	public static byte[] encrypt(String keyStr, byte[] cipherblock, Class<? extends Key> keyType) throws Exception{
+		//解密密钥
+		byte[] keyBytes = Coder.decryptBASE64(keyStr);
+		
+		Key key = null;
+		if(PrivateKey.class.equals(keyType)){
+			PKCS8EncodedKeySpec pkcs8EncodedKeySpec = new PKCS8EncodedKeySpec(keyBytes);
+			key = keyFactory.generatePrivate(pkcs8EncodedKeySpec);
+		}else{
+			X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(keyBytes);
+			key = keyFactory.generatePublic(x509EncodedKeySpec);
+		}
+		return encrypt(key, cipherblock);
+	}
 	
 	
 	
@@ -179,9 +252,28 @@ public class RSA {
      * @return 明文字符串
      */
     public static byte[] decrypt(Key key, byte[] cipherblock) throws Exception {
-        Cipher ci = Cipher.getInstance(ALGORITHOM, DEFAULT_PROVIDER);
-        ci.init(Cipher.DECRYPT_MODE, key);
-        return ci.doFinal(cipherblock);
+        Cipher cipher = Cipher.getInstance(ALGORITHOM, DEFAULT_PROVIDER);
+        cipher.init(Cipher.DECRYPT_MODE, key);
+        
+        int inputLen = cipherblock.length;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        int offSet = 0;
+
+        for(int i = 0; inputLen - offSet > 0; offSet = i * 128) {
+            byte[] cache;
+            if(inputLen - offSet > 128) {
+                cache = cipher.doFinal(cipherblock, offSet, 128);
+            } else {
+                cache = cipher.doFinal(cipherblock, offSet, inputLen - offSet);
+            }
+
+            out.write(cache, 0, cache.length);
+            ++i;
+        }
+
+        byte[] decryptedData = out.toByteArray();
+        out.close();
+        return decryptedData;
     }
 
     /**
@@ -205,17 +297,5 @@ public class RSA {
 			key = keyFactory.generatePublic(x509EncodedKeySpec);
 		}
 		return decrypt(key, cipherblock);
-	}
-	
-	public static void main(String[] args) throws Exception {
-//		generatePublicKeyFile(generateKeyPair(), "key");
-		
-		String privateKey = "MIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAJjP4kMf+PzfdlkR5IlSaIqkZHUhvl/KzOKSaAinfkr261BZGo6N7ycAWliOxY9+OoA4+qXs9aTDVeKAe/+PbSkcKB9UpKLKWIIsu+CHtDqI21noLosq5JqOZUJjMm45ZMbYGq39z5ed2Pj+ilL0vrpsHmfv/6ug7q8Voa/EwkIDAgMBAAECgYA5VOVC4d/8n6o7SKdBjhWCzqKR/5L5RZERAHTfqleLsJAgmQ2Jpl6vd0ZuK0Kbz3QLX1VKo1iV9GNok2PyQdFmIj/985TVJFu+PuR0W75y8dBBKgEWMmkpObzrcVX4JiYzWY0pk9NVhWPE96uouT50v0rSTbuxm6L6QPU1fWMb4QJBANVPkfmGxBXv7D9vHASQjG4SX29Hw2Vruifqegbrn6UgXPQ4UG1+NH0P2T2iGwroKmOsgRw/GGcHUahbT8fgzg0CQQC3ZNCeg1rBueTRvlhQIpG9oWzPQKaq8zy933igOowm69D3qTGzKpm4CBxC1k5vSBHeOFRvPSVpaof9dcjeLlxPAkEAkH2yysyf/KAlbp6r4uerSFBHtxBsakH7ulgZSqDG5kqyzHds+442rdRTem1ZVh0HwbazSlfvBrMtfBZGR4We7QJADuMYLEXtcBxu/re844Rq4EHiW1CcNvRX0fH6EMev6Njrta7+YdTrdYzy/ln3NAFdsfRQplcIWm5Ta7fL/n008QJAUb+zhUWp173HUMlpvjjQtvbAl5Wj+//knRD0DdLFtYFLFchttM+Ym1r8Q2AGIgrpIqs/MQB0keEOZztQWv9UDA==";
-		String publicKey = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCYz+JDH/j833ZZEeSJUmiKpGR1Ib5fyszikmgIp35K9utQWRqOje8nAFpYjsWPfjqAOPql7PWkw1XigHv/j20pHCgfVKSiyliCLLvgh7Q6iNtZ6C6LKuSajmVCYzJuOWTG2Bqt/c+Xndj4/opS9L66bB5n7/+roO6vFaGvxMJCAwIDAQAB";
-		byte[] cipherblock = encrypt(privateKey, "傻逼", PrivateKey.class);
-		
-		
-		byte[] plainblock =  decrypt(publicKey, cipherblock, PublicKey.class);
-		System.out.println(new String(plainblock, "UTF-8"));
 	}
 }

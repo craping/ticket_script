@@ -72,15 +72,14 @@ public class AES {
      * @param key 密钥数据
      * @return 明文字符串
      */
-	public static String decrypt(byte[] cipherblock, byte[] key) {
+	public static byte[] decrypt(byte[] cipherblock, byte[] key) {
 		SecretKeySpec spec = new SecretKeySpec(key, "AES");
 		try {
 			Cipher cipher = Cipher.getInstance(ALGORITHOM);
 			cipher.init(Cipher.DECRYPT_MODE, spec);
 			
-			byte[] byteEnc = cipher.doFinal(cipherblock);
+			return cipher.doFinal(cipherblock);
 			
-			return new String(byteEnc).trim();
 		} catch (Exception e) {
 			
 			e.printStackTrace();
@@ -111,13 +110,5 @@ public class AES {
 			e.printStackTrace();
 		}
 		return null;
-	}
-	
-	public static void main(String[] args) throws Exception {
-		byte[] key = AES.generateKey(16);
-		String base64Key = Coder.encryptBASE64(key);
-		
-		byte[] cipherblock = encrypt("傻逼".getBytes(), key);
-		System.out.println(new String(decrypt(cipherblock, key)));
 	}
 }

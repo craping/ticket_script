@@ -2,11 +2,9 @@ package ts.security;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 
 import org.bouncycastle.util.encoders.Hex;
-
-import sun.misc.BASE64Decoder;
-import sun.misc.BASE64Encoder;
 
 /** 
  * @project Crap
@@ -50,7 +48,8 @@ public class Coder {
 	 * @throws Exception
 	 */
 	public static byte[] decryptBASE64(String key) throws Exception{
-		return (new BASE64Decoder()).decodeBuffer(key);
+		return Base64.getDecoder().decode(key.getBytes());
+//		return (new BASE64Decoder()).decodeBuffer(key);
 	}
 	
 	/**
@@ -60,7 +59,8 @@ public class Coder {
 	 * @throws Exception
 	 */
 	public static String encryptBASE64(byte[] key)throws Exception{
-		return (new BASE64Encoder()).encodeBuffer(key);
+		return Base64.getEncoder().encodeToString(key);
+//		return (new BASE64Encoder()).encodeBuffer(key);
 	}
 	
 	/**

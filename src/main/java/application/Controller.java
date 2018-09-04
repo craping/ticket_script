@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.stream.Collectors;
@@ -40,7 +41,11 @@ import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
@@ -49,6 +54,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
 import javafx.stage.FileChooser;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 import ts.entity.Person;
 import ts.win32.KeyHook;
@@ -126,7 +132,7 @@ public class Controller implements Initializable {
                     case WinUser.WM_KEYDOWN:
                     case WinUser.WM_SYSKEYUP:
                     case WinUser.WM_SYSKEYDOWN:
-                        System.err.println("in callback, key=" + info.vkCode);
+//                        System.err.println("in callback, key=" + info.vkCode);
                         if (info.vkCode == 35) {
                             System.err.println("exit");
                             User32.INSTANCE.UnhookWindowsHookEx(KeyHook.hhk);
@@ -152,6 +158,35 @@ public class Controller implements Initializable {
 	}
 	
 	public void start(ActionEvent event) {
+		if(Main.license == null) {
+			Alert alert = new Alert(Alert.AlertType.INFORMATION);
+			alert.setTitle("提示");
+			alert.setHeaderText("软件未激活");
+			alert.showAndWait();
+			return;
+		}
+		if(!AppInfo.sn().equals(Main.license.getSn())) {
+			Alert alert = new Alert(Alert.AlertType.INFORMATION);
+			alert.setTitle("提示");
+			alert.setHeaderText("证书不匹配");
+			alert.showAndWait();
+			return;
+		}
+		if(Main.license.getExpire() != null && Main.license.getExpire().compareTo(new Date()) == -1) {
+			Alert alert = new Alert(Alert.AlertType.INFORMATION);
+			alert.setTitle("提示");
+			alert.setHeaderText("证书已过期");
+			alert.showAndWait();
+			return;
+		}
+		
+		if(new Date().compareTo(Main.license.getTime()) == -1) {
+			Alert alert = new Alert(Alert.AlertType.INFORMATION);
+			alert.setTitle("提示");
+			alert.setHeaderText("系统时间与证书异常");
+			alert.showAndWait();
+			return;
+		}
 		if(btn_start.getText().equals("开始")) {
 			btn_start.setText("停止");
 			
@@ -207,6 +242,7 @@ public class Controller implements Initializable {
 					Person person = new Person();
 					person.setName(row.getCell(0).getStringCellValue().trim());
 					person.setId(row.getCell(1).getStringCellValue().trim());
+					person.setType(renderType(person.getId()));
 					data.add(person);
 				});
 			} catch (IOException | EncryptedDocumentException | InvalidFormatException e) {
@@ -277,5 +313,35 @@ public class Controller implements Initializable {
 		} catch (EncryptedDocumentException | IOException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	public void about(ActionEvent event) {
+		try {
+			Parent target = FXMLLoader.load(getClass().getClassLoader().getResource("Abount.fxml"));
+			Scene scene = new Scene(target);
+			Stage aboutStage = new Stage();
+			aboutStage.setScene(scene);
+			aboutStage.setResizable(false);
+			aboutStage.initOwner(stage);
+			aboutStage.initModality(Modality.APPLICATION_MODAL);
+			aboutStage.show();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private String renderType(String id) {
+		if(id.matches("(^\\d{15}$)|(^\\d{18}$)|(^\\d{17}(\\d|X|x)$)"))
+			return "身份证";
+		if(id.matches("^[a-zA-Z]{5,17}$") || id.matches("^[a-zA-Z0-9]{5,17}$"))
+			return "护照";
+		if(id.matches("^[HMChmc]{1}([0-9]{10}|[0-9]{8})$"))
+			return "港澳通行";
+		if(id.matches("^[0-9]{8}$") || id.matches("^[0-9]{10}$"))
+			return "台湾通行证";
+		return "";
+	}
+	public void test(ActionEvent event) {
+        
 	}
 }
