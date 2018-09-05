@@ -43,22 +43,29 @@ public class Main extends Application {
 			@Override
 			public void run() {
 				Date now = new Date();
+				if(license != null && AppInfo.sn().equals(Main.license.getSn()) 
+				&& license.getExpire() != null && license.getExpire().compareTo(now) == 1 
+				&& now.compareTo(license.getTime()) == 1) {
+					
+					license.setTime(now);
+					AppInfo.setLicense(license);
+				}
+			}
+		}, 0, 60000);
+		
+		timer.schedule(new TimerTask() {
+			
+			@Override
+			public void run() {
 				if(license != null) {
 					File file = new File(System.getProperty("user.dir")+"/License");
 					if(!file.exists()) {
 						User32.INSTANCE.UnhookWindowsHookEx(KeyHook.hhk);
 						System.exit(0);
 					}
-					
-					if(license.getExpire().compareTo(now) == 1 && AppInfo.sn().equals(Main.license.getSn())) {
-						if(now.compareTo(license.getTime()) == 1) {
-							license.setTime(now);
-							AppInfo.setLicense(license);
-						}
-					}
 				}
 			}
-		}, 0, 60000);
+		}, 0, 100);
 		launch(args);
 	}
 }
