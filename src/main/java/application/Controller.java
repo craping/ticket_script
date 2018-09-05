@@ -25,6 +25,15 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import com.sun.jna.Pointer;
+import com.sun.jna.platform.win32.User32;
+import com.sun.jna.platform.win32.WinDef.LPARAM;
+import com.sun.jna.platform.win32.WinDef.LRESULT;
+import com.sun.jna.platform.win32.WinDef.WPARAM;
+import com.sun.jna.platform.win32.WinUser;
+import com.sun.jna.platform.win32.WinUser.KBDLLHOOKSTRUCT;
+import com.sun.jna.platform.win32.WinUser.LowLevelKeyboardProc;
+
 import javafx.application.Platform;
 import javafx.beans.property.StringProperty;
 import javafx.beans.value.ChangeListener;
@@ -34,9 +43,12 @@ import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TableColumn;
@@ -48,9 +60,11 @@ import javafx.scene.input.TransferMode;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 import ts.entity.Person;
 import ts.entity.Train;
+import ts.win32.KeyHook;
 import ts.win32.TicketWin32;
 
 public class Controller implements Initializable {
@@ -133,7 +147,40 @@ public class Controller implements Initializable {
 				String suffix = name.substring(name.lastIndexOf(".") + 1);
 				return suffix.equals("xls") || suffix.equals("xlsx");
 			}).collect(Collectors.toList());
-			importFiles1(files);
+			importFiles(files);
+		});
+		
+		new Thread(new KeyHook(new LowLevelKeyboardProc() {
+            @Override
+            public LRESULT callback(int nCode, WPARAM wParam, KBDLLHOOKSTRUCT info) {
+            	if (nCode >= 0) {
+                    switch(wParam.intValue()) {
+                    case WinUser.WM_KEYUP:
+                    case WinUser.WM_KEYDOWN:
+                    case WinUser.WM_SYSKEYUP:
+                    case WinUser.WM_SYSKEYDOWN:
+//                        System.err.println("in callback, key=" + info.vkCode);
+                        if (info.vkCode == 35) {
+                            System.err.println("exit");
+                            User32.INSTANCE.UnhookWindowsHookEx(KeyHook.hhk);
+                            System.exit(0);
+                        }
+                        if(info.vkCode == 45) {
+                        	Platform.runLater(() -> {
+                        		start(null);
+            				});
+                        }
+                    }
+                }
+                Pointer ptr = info.getPointer();
+                long peer = Pointer.nativeValue(ptr);
+                return User32.INSTANCE.CallNextHookEx(KeyHook.hhk, nCode, wParam, new LPARAM(peer));
+            }
+        })).start();
+		
+		stage.setOnCloseRequest(e -> {
+			User32.INSTANCE.UnhookWindowsHookEx(KeyHook.hhk);
+			System.exit(0);
 		});
 	}
 	
@@ -214,10 +261,10 @@ public class Controller implements Initializable {
 		
 		System.out.println(lastImportFile.getAbsolutePath());
 		
-		importFiles1(Arrays.asList(lastImportFile));
+		importFiles(Arrays.asList(lastImportFile));
 	}
 	
-	private void importFiles1(List<File> files) {
+	private void importFiles(List<File> files) {
 		vbox.getChildren().clear();
 		trains.clear();
 		tables.clear();
@@ -256,7 +303,11 @@ public class Controller implements Initializable {
 						TableColumn<Person, String> col_id = new TableColumn<>("证件");
 						col_id.setCellValueFactory(new PropertyValueFactory<>("id"));
 						table.getColumns().add(col_id);
-
+						
+						TableColumn<Person, String> col_type = new TableColumn<>("类型");
+						col_type.setCellValueFactory(new PropertyValueFactory<>("type"));
+						table.getColumns().add(col_type);
+						
 						TableColumn<Person, StringProperty> col_status = new TableColumn<>("状态");
 						col_status.setCellValueFactory(new PropertyValueFactory<>("status"));
 						table.getColumns().add(col_status);
@@ -285,6 +336,7 @@ public class Controller implements Initializable {
 						Person person = new Person();
 						person.setName(row.getCell(0).getStringCellValue().trim());
 						person.setId(row.getCell(1).getStringCellValue().trim());
+						person.setType(renderType(person.getId()));
 						
 						person.statusProperty().addListener(new ChangeListener<String>() {
 							
@@ -322,49 +374,6 @@ public class Controller implements Initializable {
 			}
 		});
 	}
-	
-	
-	/*private void importFiles(List<File> files) {
-		ObservableList<Person> data = FXCollections.observableArrayList();
-		
-		files.forEach(file -> {
-			FileInputStream fis = null;
-			try {
-				fis = new FileInputStream(file);
-				Workbook book = WorkbookFactory.create(fis);
-				Sheet sheet = book.getSheetAt(0);
-				
-				sheet.forEach(row ->{
-					final Person person = new Person();
-					row.forEach(cell -> {
-						if(cell.getCellTypeEnum().equals(CellType.BLANK))
-							return;
-						
-						switch (cell.getColumnIndex()) {
-						case 2:
-							person.setId(cell.getStringCellValue().trim());
-							break;
-						case 1:
-							person.setName(cell.getStringCellValue().trim());
-							break;
-						}
-					});
-					
-					data.add(person);
-				});
-			} catch (IOException | EncryptedDocumentException | InvalidFormatException e) {
-				e.printStackTrace();
-			} finally {
-				try {
-					if(fis != null)
-						fis.close();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			}
-		});
-		table.setItems(data);
-	}*/
 	
 	
 	public void openExportFile(ActionEvent event) {
@@ -422,46 +431,33 @@ public class Controller implements Initializable {
 		}
 	}
 	
+	public void about(ActionEvent event) {
+		try {
+			Parent target = FXMLLoader.load(getClass().getClassLoader().getResource("Abount.fxml"));
+			Scene scene = new Scene(target);
+			Stage aboutStage = new Stage();
+			aboutStage.setScene(scene);
+			aboutStage.setResizable(false);
+			aboutStage.initOwner(stage);
+			aboutStage.initModality(Modality.APPLICATION_MODAL);
+			aboutStage.show();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private String renderType(String id) {
+		if(id.matches("(^\\d{15}$)|(^\\d{18}$)|(^\\d{17}(\\d|X|x)$)"))
+			return "身份证";
+		if(id.matches("^[a-zA-Z]{5,17}$") || id.matches("^[a-zA-Z0-9]{5,17}$"))
+			return "护照";
+		if(id.matches("^[HMChmc]{1}([0-9]{10}|[0-9]{8})$"))
+			return "港澳通行";
+		if(id.matches("^[0-9]{8}$") || id.matches("^[0-9]{10}$"))
+			return "台湾通行证";
+		return "";
+	}
+	
 	public void test(ActionEvent event) {
-		/*HWND FNWNS380 = User32.INSTANCE.FindWindow("FNWNS380", "证件信息录入窗口");
-		if(FNWNS380 != null) {
-			HWND idEdit = User32.INSTANCE.FindWindowEx(FNWNS380, null, "Edit", null);
-			while(idEdit != null && !User32.INSTANCE.IsWindowVisible(idEdit)) {
-				idEdit = User32.INSTANCE.FindWindowEx(FNWNS380, idEdit, "Edit", null);
-			}
-			char[] staticText = new char[255];
-			Win32.INSTANCE.SendMessage(idEdit, Win32.WM_GETTEXT, 255, staticText);
-			System.out.println("id:"+Native.toString(staticText));
-			
-			HWND nameEdit = User32.INSTANCE.FindWindowEx(FNWNS380, idEdit, "Edit", null);
-			while(nameEdit != null && !User32.INSTANCE.IsWindowVisible(nameEdit)) {
-				nameEdit = User32.INSTANCE.FindWindowEx(FNWNS380, nameEdit, "Edit", null);
-			}
-			Win32.INSTANCE.SendMessage(nameEdit, Win32.WM_GETTEXT, 255, staticText);
-			System.out.println("name:"+Native.toString(staticText));
-		}*/
-		/*HWND FNWND380 = User32.INSTANCE.FindWindow("FNWND380", null);
-		if(FNWND380 != null) {
-			HWND dateEdit = User32.INSTANCE.FindWindowEx(FNWND380, null, "Edit", null);
-			while(dateEdit != null) {
-				
-				if(User32.INSTANCE.IsWindowVisible(dateEdit)) {
-					char[] staticText = new char[255];
-					Win32.INSTANCE.SendMessage(dateEdit, Win32.WM_GETTEXT, 255, staticText);
-					System.out.println("id:"+Native.toString(staticText));
-					
-					RECT rect = new RECT();
-					Win32.INSTANCE.GetClientRect(dateEdit, rect);
-					System.out.println(rect);
-					System.out.println(rect.toRectangle());
-				}
-				dateEdit = User32.INSTANCE.FindWindowEx(FNWND380, dateEdit, "Edit", null);
-			}
-			Win32.INSTANCE.SwitchToThisWindow(FNWND380, true);
-			Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
-			Win32.INSTANCE.keybd_event((byte)78, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
-			Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
-			Win32.INSTANCE.keybd_event((byte)78, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
-		}*/
 	}
 }
