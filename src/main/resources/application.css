@@ -1,4 +1,32 @@
-/* JavaFX CSS - Leave this comment until you have at least create one rule which uses -fx-Property */
 .hide-header .column-header-background { 
     visibility: hidden; -fx-padding: -1em;
+}
+
+.table-view .column-header,
+.table-view .filler{
+    -fx-background-color:#DDDDDD;
+    -fx-font-weight:normal;
+    -fx-border-color:#F9F9F9;
+}
+
+.table-view *.scroll-bar:horizontal *.increment-button,
+.table-view *.scroll-bar:horizontal *.decrement-button,
+.table-view *.scroll-bar:vertical *.increment-button,
+.table-view *.scroll-bar:vertical *.decrement-button {
+    -fx-background-color: null;
+    -fx-background-radius: 0;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+
+.table-view *.scroll-bar:horizontal *.increment-arrow, 
+.table-view *.scroll-bar:horizontal *.decrement-arrow,
+.table-view *.scroll-bar:vertical *.increment-arrow, 
+.table-view *.scroll-bar:vertical *.decrement-arrow {
+    -fx-background-color: null;
+    -fx-background-radius: 0;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-shape: null;
 }

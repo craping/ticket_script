@@ -41,8 +41,8 @@ public class LicenseProducer {
 		cal.add(Calendar.DATE, 30);
 		
 		System.out.printf("%1$tF %1$tT\n", cal.getTime());
-//		lic.setSn(AppInfo.sn());
-		lic.setSn("E6901E23B7E046E882120C36D42D73BF");
+//		lic.setSn("E6901E23B7E046E882120C36D42D73BF");
+		lic.setSn("8DD9A9899D80DE172B25E2EE87FBD942");
 //		lic.setExpire(cal.getTime());
 		lic.setKey(Coder.encryptBASE64(AES.generateKey(16)));
 		

@@ -1,5 +1,8 @@
 package ts.entity;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
@@ -11,9 +14,13 @@ public class Person {
 	
 	private String type;
 	
-	private final StringProperty status = new SimpleStringProperty("未执行");
+//	private final StringProperty status = new SimpleStringProperty("未执行");
+	
+	private Map<String, StringProperty> status = new HashMap<>();
 	
 	public Person() {
+		status.put("A", new SimpleStringProperty("未执行1"));
+		status.put("B", new SimpleStringProperty("未执行2"));
 	}
 
 	public Person(String id, String name) {
@@ -45,7 +52,15 @@ public class Person {
 		this.type = type;
 	}
 
-	public String getStatus() {
+	public Map<String, StringProperty> getStatus() {
+		return status;
+	}
+
+	public void setStatus(Map<String, StringProperty> status) {
+		this.status = status;
+	}
+
+	/*public String getStatus() {
 		return status.get();
 	}
 
@@ -54,6 +69,7 @@ public class Person {
 	}
 	public void setStatus(String status) {
 		this.status.set(status);;
-	}
+	}*/
+	
 	
 }

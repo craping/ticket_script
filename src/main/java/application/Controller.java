@@ -35,6 +35,7 @@ import com.sun.jna.platform.win32.WinUser.KBDLLHOOKSTRUCT;
 import com.sun.jna.platform.win32.WinUser.LowLevelKeyboardProc;
 
 import javafx.application.Platform;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -63,6 +64,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import ts.entity.Person;
+import ts.entity.Ticket;
 import ts.entity.Train;
 import ts.win32.KeyHook;
 import ts.win32.TicketWin32;
@@ -76,6 +78,8 @@ public class Controller implements Initializable {
 	public final FileChooser exportChooser = new FileChooser();
 	
 	private List<Train> trains = new ArrayList<>();
+	
+	private List<Ticket> tickets = new ArrayList<>();
 	
 	private List<TableView<Person>> tables = new ArrayList<>();
 	
@@ -194,11 +198,11 @@ public class Controller implements Initializable {
 					for (Train train : trains) {
 						if(Thread.currentThread().isInterrupted())
 							break;
-						TableView<Person> table = tables.get(trains.indexOf(train));
-						
+//						TableView<Person> table = tables.get(trains.indexOf(train));
 						if(TicketWin32.search(train)) {
 							
-							FilteredList<Person> filterData = train.getPersons().filtered(person -> !"".equals(person.getId()) && !"".equals(person.getName()) && person.getStatus().equals("未执行"));
+							FilteredList<Person> filterData = train.getPersons()
+									.filtered(person -> !"".equals(person.getId()) && !"".equals(person.getName()) && person.getStatus().get(Arrays.toString(train.getNo())).get().equals("未执行"));
 							for (Person person : filterData) {
 								
 								if(Thread.currentThread().isInterrupted())
@@ -206,12 +210,12 @@ public class Controller implements Initializable {
 								
 								Thread.sleep(1000);
 								
-								person.setStatus("成功");
+								person.getStatus().get(Arrays.toString(train.getNo())).set("成功");
 	//							person.setStatus(TicketWin32.print(person));
 							}
 						}
 					}
-				
+					Thread.sleep(1000);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -224,32 +228,7 @@ public class Controller implements Initializable {
 			scritpThread.interrupt();
 		}
 	}
-	
-	/*public void start1(ActionEvent event) {
-		if(btn_start.getText().equals("开始")) {
-			btn_start.setText("停止");
-			
-			scritpThread = new Thread(() -> {
-				ObservableList<Person> data = table.getItems();
-				FilteredList<Person> filterData = data.filtered(person -> !"".equals(person.getId()) && !"".equals(person.getName()) && person.getStatus().equals("未执行"));
-				
-				for (Person person : filterData) {
-					if(Thread.currentThread().isInterrupted())
-						break;
-					
-					person.setStatus(Win32.print(person));
-					table.refresh();
-				}
-				Platform.runLater(() -> {
-					btn_start.setText("开始");
-					table.refresh();
-				});
-			});
-			scritpThread.start();
-		} else {
-			scritpThread.interrupt();
-		}
-	}*/
+
 	
 	public void openImportFile(ActionEvent event) {
 		if(lastImportFile != null && lastImportFile.isFile())
@@ -267,6 +246,7 @@ public class Controller implements Initializable {
 	private void importFiles(List<File> files) {
 		vbox.getChildren().clear();
 		trains.clear();
+		tickets.clear();
 		tables.clear();
 		files.forEach(file -> {
 			FileInputStream fis = null;
@@ -275,91 +255,106 @@ public class Controller implements Initializable {
 				Workbook book = WorkbookFactory.create(fis);
 				Sheet sheet = book.getSheetAt(0);
 				
-				Train train = null;
-				TitledPane tp = null;
+				Ticket ticket = new Ticket();
+				Person person = null;
+				
 				for (Row row : sheet) {
 					row.forEach(cell -> {
 						cell.setCellType(CellType.STRING);
 					});
 					String firstCell = row.getCell(0).getStringCellValue().trim();
 					if(Character.isDigit(firstCell.charAt(0))) {
-						train = new Train();
+						
+						if(person != null) {
+							ticket = new Ticket();
+						}
+						
+						Train train = new Train();
 						train.setDate(firstCell.split(","));
 						train.setNo(row.getCell(1).getStringCellValue().trim().split(","));
 						train.setFrom(row.getCell(2).getStringCellValue().trim());
 						train.setTo(row.getCell(3).getStringCellValue().trim());
 						train.setSeat(row.getCell(4).getStringCellValue().trim());
+						
 						trains.add(train);
-						
-						TableView<Person> table = new TableView<>();
-						table.setEditable(false);
-						table.getStyleClass().add("hide-header");
-						table.prefWidthProperty().bind(scroll.widthProperty().subtract(4));
-						
-						TableColumn<Person, String> col_name = new TableColumn<>("姓名");
-						col_name.setCellValueFactory(new PropertyValueFactory<>("name"));
-						table.getColumns().add(col_name);
-						
-						TableColumn<Person, String> col_id = new TableColumn<>("证件");
-						col_id.setCellValueFactory(new PropertyValueFactory<>("id"));
-						table.getColumns().add(col_id);
-						
-						TableColumn<Person, String> col_type = new TableColumn<>("类型");
-						col_type.setCellValueFactory(new PropertyValueFactory<>("type"));
-						table.getColumns().add(col_type);
-						
-						TableColumn<Person, StringProperty> col_status = new TableColumn<>("状态");
-						col_status.setCellValueFactory(new PropertyValueFactory<>("status"));
-						table.getColumns().add(col_status);
-						table.getColumns().forEach(col -> {
-							col.setSortable(false);
-						});
-						table.setItems(train.getPersons());
-						tables.add(table);
-						
-						FlowPane content = new FlowPane();
-						content.setAlignment(Pos.CENTER_LEFT);
-						content.getChildren().add(table);
-						FlowPane.setMargin(table, new Insets(-10));
-						
-						tp = new TitledPane(train.toString(), content);
-						tp.textProperty().bind(train.textProperty());
-						tp.setExpanded(false);
-						tp.setAnimated(false);
-						vbox.getChildren().add(tp);
-						
-						train.getPersons().addListener((Change<? extends Person> c) -> {
-							table.setPrefHeight(c.getList().size()*24.4);
-						});
-						
+						ticket.getTrains().add(train);
+						person = null;
 					} else {
-						Person person = new Person();
+						
+						if(person == null) {
+							TableView<Person> table = new TableView<>();
+							table.setEditable(false);
+							
+							table.prefWidthProperty().bind(scroll.widthProperty().subtract(4));
+							
+							TableColumn<Person, String> col_name = new TableColumn<>("姓名");
+							col_name.setCellValueFactory(new PropertyValueFactory<>("name"));
+							table.getColumns().add(col_name);
+							
+							TableColumn<Person, String> col_id = new TableColumn<>("证件");
+							col_id.setCellValueFactory(new PropertyValueFactory<>("id"));
+							table.getColumns().add(col_id);
+							
+							TableColumn<Person, String> col_type = new TableColumn<>("类型");
+							col_type.setCellValueFactory(new PropertyValueFactory<>("type"));
+							table.getColumns().add(col_type);
+							
+							ticket.getTrains().forEach(t -> {
+								TableColumn<Person, String> col_status = new TableColumn<>("车次"+Arrays.toString(t.getNo()));
+								col_status.setCellValueFactory(param -> param.getValue().getStatus().get(Arrays.toString(t.getNo())));
+								table.getColumns().add(col_status);
+							});
+							
+							table.getColumns().forEach(col -> {
+								col.setSortable(false);
+							});
+							table.setItems(ticket.getPersons());
+							tables.add(table);
+							
+							FlowPane content = new FlowPane();
+							content.setAlignment(Pos.CENTER_LEFT);
+							content.getChildren().add(table);
+							FlowPane.setMargin(table, new Insets(-10));
+							
+							TitledPane tp = new TitledPane(ticket.toString(), content);
+							tp.textProperty().bind(ticket.textProperty());
+//							tp.setExpanded(false);
+							tp.setAnimated(false);
+							vbox.getChildren().add(tp);
+							
+							ticket.getPersons().addListener((Change<? extends Person> c) -> {
+								table.setPrefHeight(24.4 + c.getList().size()*24.4);
+							});
+						}
+						
+						person = new Person();
 						person.setName(row.getCell(0).getStringCellValue().trim());
 						person.setId(row.getCell(1).getStringCellValue().trim());
 						person.setType(renderType(person.getId()));
+						for (Train t : ticket.getTrains()) {
+							StringProperty sp = new SimpleStringProperty("未执行");
+							sp.addListener(new ChangeListener<String>() {
+								
+								private Ticket ticket;
+								
+								public ChangeListener<String> accept(Ticket ticket) {
+					                this.ticket = ticket;
+					                return this;
+					            }
+								
+								@Override
+								public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
+									Platform.runLater(() -> {
+										ticket.refresh();
+									});
+								}
+							}.accept(ticket));
+							person.getStatus().put(Arrays.toString(t.getNo()), sp);
+							t.getPersons().add(person);
+						}
 						
-						person.statusProperty().addListener(new ChangeListener<String>() {
-							
-							private Train train;
-							
-							public ChangeListener<String> accept(Train train) {
-				                this.train = train;
-				                return this;
-				            }
-							
-							@Override
-							public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
-								Platform.runLater(() -> {
-									train.refresh();
-								});
-							}
-						}.accept(train));
-						
-//						person.statusProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
-//							System.out.println("chage");
-//							train.refresh();
-//						});
-						train.getPersons().add(person);
+						ticket.getPersons().add(person);
+						ticket.refresh();
 					}
 				}
 			} catch (IOException | EncryptedDocumentException | InvalidFormatException e) {
@@ -418,7 +413,7 @@ public class Controller implements Initializable {
 	        	dataRow.createCell(1).setCellValue(person.getName());
 		        
 	        	dataRow.createCell(2).setCellStyle(style);
-	        	dataRow.createCell(2).setCellValue(person.getStatus());
+//	        	dataRow.createCell(2).setCellValue(person.getStatus());
 			}
 	        
 	        book.setSheetName(0, "结果");

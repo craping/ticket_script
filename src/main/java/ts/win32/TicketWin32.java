@@ -1,5 +1,6 @@
 package ts.win32;
 
+import java.util.Arrays;
 import java.util.function.Predicate;
 
 import com.sun.jna.Native;
@@ -22,14 +23,7 @@ public class TicketWin32 {
 		
 		HWND FNWND380 = User32.INSTANCE.FindWindow("FNWND380", null);
 		if(FNWND380 != null) {
-//			FilteredList<Person> undo = train.getPersons().filtered(p -> !p.getStatus().equals("未执行"));
-			FilteredList<Person> undo = train.getPersons().filtered(new Predicate<Person>() {
-				
-				@Override
-				public boolean test(Person p) {
-					return !p.getStatus().equals("未执行");
-				}
-			});
+			FilteredList<Person> undo = train.getPersons().filtered(p -> p.getStatus().get(Arrays.toString(train.getNo())).get().equals("未执行"));
 			int ticketNum = undo.size() > 10?10:undo.size();
 			String[] dates = train.getDate();
 			String[] nos = train.getNo();
@@ -257,7 +251,7 @@ public class TicketWin32 {
 		}
 	}
 	
-public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Exception {
 		
 		HWND Notepad = User32.INSTANCE.FindWindow("Notepad", "无标题 - 记事本");
 		Win32.INSTANCE.SwitchToThisWindow(Notepad, true);

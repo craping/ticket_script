@@ -1,8 +1,6 @@
 package ts.entity;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;import java.util.function.Predicate;
 
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -93,8 +91,8 @@ public class Train {
 
 	@Override
 	public String toString() {
-		FilteredList<Person> undo = persons.filtered(p -> !p.getStatus().equals("未执行"));
-		FilteredList<Person> success = persons.filtered(p -> !p.getStatus().equals("成功"));
+		FilteredList<Person> undo = persons.filtered(p -> !p.getStatus().get(Arrays.toString(no)).get().equals("未执行"));
+		FilteredList<Person> success = persons.filtered(p -> p.getStatus().get(Arrays.toString(no)).get().equals("成功"));
 		
 		return "日期："+Arrays.toString(date) 
 		+ " 车次：" + Arrays.toString(no) 
