@@ -8,6 +8,7 @@ import java.util.TimerTask;
 import com.sun.jna.platform.win32.User32;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -30,8 +31,10 @@ public class Main extends Application {
 			Parent root = FXMLLoader.load(getClass().getClassLoader().getResource("Scene.fxml"));
 			Scene scene = new Scene(root);
 			scene.getStylesheets().add(getClass().getClassLoader().getResource("application.css").toExternalForm());
+			primaryStage.setIconified(false);
 			primaryStage.setScene(scene);
 			primaryStage.show();
+			Platform.setImplicitExit(false);
 		} catch(Exception e) {
 			e.printStackTrace();
 		}

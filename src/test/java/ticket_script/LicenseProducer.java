@@ -42,7 +42,9 @@ public class LicenseProducer {
 		
 		System.out.printf("%1$tF %1$tT\n", cal.getTime());
 //		lic.setSn("E6901E23B7E046E882120C36D42D73BF");
-		lic.setSn("8DD9A9899D80DE172B25E2EE87FBD942");
+//		lic.setSn("8DD9A9899D80DE172B25E2EE87FBD942");
+		lic.setSn(AppInfo.sn());
+		
 //		lic.setExpire(cal.getTime());
 		lic.setKey(Coder.encryptBASE64(AES.generateKey(16)));
 		

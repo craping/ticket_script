@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.stream.Collectors;
@@ -27,6 +28,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.User32;
+import com.sun.jna.platform.win32.WinDef.HWND;
 import com.sun.jna.platform.win32.WinDef.LPARAM;
 import com.sun.jna.platform.win32.WinDef.LRESULT;
 import com.sun.jna.platform.win32.WinDef.WPARAM;
@@ -48,10 +50,13 @@ import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TitledPane;
@@ -60,14 +65,17 @@ import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.util.Callback;
 import ts.entity.Person;
 import ts.entity.Ticket;
 import ts.entity.Train;
 import ts.win32.KeyHook;
 import ts.win32.TicketWin32;
+import ts.win32.Win32;
 
 public class Controller implements Initializable {
 	
@@ -159,15 +167,24 @@ public class Controller implements Initializable {
             public LRESULT callback(int nCode, WPARAM wParam, KBDLLHOOKSTRUCT info) {
             	if (nCode >= 0) {
                     switch(wParam.intValue()) {
-                    case WinUser.WM_KEYUP:
+//                    case WinUser.WM_KEYUP:
                     case WinUser.WM_KEYDOWN:
-                    case WinUser.WM_SYSKEYUP:
+//                    case WinUser.WM_SYSKEYUP:
                     case WinUser.WM_SYSKEYDOWN:
-//                        System.err.println("in callback, key=" + info.vkCode);
+                        System.err.println("in callback, key=" + info.vkCode);
                         if (info.vkCode == 35) {
                             System.err.println("exit");
                             User32.INSTANCE.UnhookWindowsHookEx(KeyHook.hhk);
                             System.exit(0);
+                        }
+                        if (info.vkCode == 36) {
+                        	Platform.runLater(() -> {
+	                        	if(stage.isShowing()) {
+	                    			stage.hide();
+	                    		} else {
+	                				stage.show();
+	                    		}
+                        	});
                         }
                         if(info.vkCode == 45) {
                         	Platform.runLater(() -> {
@@ -189,6 +206,36 @@ public class Controller implements Initializable {
 	}
 	
 	public void start(ActionEvent event) {
+		if(Main.license == null) {
+			Alert alert = new Alert(Alert.AlertType.INFORMATION);
+			alert.setTitle("提示");
+			alert.setHeaderText("软件未激活");
+			alert.showAndWait();
+			return;
+		}
+		if(!AppInfo.sn().equals(Main.license.getSn())) {
+			Alert alert = new Alert(Alert.AlertType.INFORMATION);
+			alert.setTitle("提示");
+			alert.setHeaderText("证书不匹配");
+			alert.showAndWait();
+			return;
+		}
+		if(Main.license.getExpire() != null && Main.license.getExpire().compareTo(new Date()) == -1) {
+			Alert alert = new Alert(Alert.AlertType.INFORMATION);
+			alert.setTitle("提示");
+			alert.setHeaderText("证书已过期");
+			alert.showAndWait();
+			return;
+		}
+		
+		if(new Date().compareTo(Main.license.getTime()) == -1) {
+			Alert alert = new Alert(Alert.AlertType.INFORMATION);
+			alert.setTitle("提示");
+			alert.setHeaderText("系统时间与证书异常");
+			alert.showAndWait();
+			return;
+		}
+		
 		if(btn_start.getText().equals("开始")) {
 			btn_start.setText("停止");
 			
@@ -198,7 +245,6 @@ public class Controller implements Initializable {
 					for (Train train : trains) {
 						if(Thread.currentThread().isInterrupted())
 							break;
-//						TableView<Person> table = tables.get(trains.indexOf(train));
 						if(TicketWin32.search(train)) {
 							
 							FilteredList<Person> filterData = train.getPersons()
@@ -209,13 +255,11 @@ public class Controller implements Initializable {
 									break;
 								
 								Thread.sleep(1000);
-								
 								person.getStatus().get(Arrays.toString(train.getNo())).set("成功");
-	//							person.setStatus(TicketWin32.print(person));
+	//							person.getStatus().get(Arrays.toString(train.getNo())).set(TicketWin32.print(person));
 							}
 						}
 					}
-					Thread.sleep(1000);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -302,6 +346,31 @@ public class Controller implements Initializable {
 							ticket.getTrains().forEach(t -> {
 								TableColumn<Person, String> col_status = new TableColumn<>("车次"+Arrays.toString(t.getNo()));
 								col_status.setCellValueFactory(param -> param.getValue().getStatus().get(Arrays.toString(t.getNo())));
+								col_status.setCellFactory(new Callback<TableColumn<Person,String>, TableCell<Person,String>>() {
+									
+									@Override
+									public TableCell<Person, String> call(TableColumn<Person, String> param) {
+										
+										return new TableCell<Person, String>() {
+							                @Override protected void updateItem(String item, boolean empty) {
+							                    if (item == getItem()) return;
+							                    super.updateItem(item, empty);
+							                    
+							                    if (item == null) {
+							                        super.setText(null);
+							                        super.setGraphic(null);
+							                    } else {
+							                    	if(!item.equals("成功"))
+								                    	setTextFill(Color.web("#DC3545"));
+								                    else
+								                    	setTextFill(Color.web("#28A745"));
+							                        super.setText(item);
+							                        super.setGraphic(null);
+							                    }
+							                }
+							            };
+									}
+								});
 								table.getColumns().add(col_status);
 							});
 							
@@ -325,6 +394,7 @@ public class Controller implements Initializable {
 							ticket.getPersons().addListener((Change<? extends Person> c) -> {
 								table.setPrefHeight(24.4 + c.getList().size()*24.4);
 							});
+							tickets.add(ticket);
 						}
 						
 						person = new Person();
@@ -454,5 +524,13 @@ public class Controller implements Initializable {
 	}
 	
 	public void test(ActionEvent event) {
+		HWND Notepad = User32.INSTANCE.FindWindow("Notepad", "无标题 - 记事本");
+		Win32.INSTANCE.SwitchToThisWindow(Notepad, true);
+		HWND edit = User32.INSTANCE.FindWindowEx(Notepad, null, "Edit", null);
+		
+		char[] a = "9MOP深圳北".toCharArray();
+		for (char c : a) {
+			User32.INSTANCE.SendMessage(edit, User32.WM_CHAR, new WPARAM(c), new LPARAM(0));
+		}
 	}
 }

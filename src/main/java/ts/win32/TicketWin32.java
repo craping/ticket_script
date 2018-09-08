@@ -1,7 +1,6 @@
 package ts.win32;
 
 import java.util.Arrays;
-import java.util.function.Predicate;
 
 import com.sun.jna.Native;
 import com.sun.jna.platform.win32.User32;
@@ -74,7 +73,7 @@ public class TicketWin32 {
 					//发站
 					Win32.INSTANCE.SwitchToThisWindow(fromEdit, true);
 					for (char c : train.getFrom().toCharArray()) {
-						User32.INSTANCE.SendMessage(fromEdit, User32.WM_CHAR, new WPARAM((byte)c), new LPARAM(0));
+						User32.INSTANCE.SendMessage(fromEdit, User32.WM_CHAR, new WPARAM(c), new LPARAM(0));
 					}
 //					Win32.INSTANCE.SendMessage(fromEdit, WM_SETTEXT, 0, train.getFrom());
 					//回车
@@ -85,7 +84,7 @@ public class TicketWin32 {
 					Win32.INSTANCE.SwitchToThisWindow(toEdit, true);
 //					Win32.INSTANCE.SendMessage(toEdit, WM_SETTEXT, 0, train.getTo());
 					for (char c : train.getTo().toCharArray()) {
-						User32.INSTANCE.SendMessage(toEdit, User32.WM_CHAR, new WPARAM((byte)c), new LPARAM(0));
+						User32.INSTANCE.SendMessage(toEdit, User32.WM_CHAR, new WPARAM(c), new LPARAM(0));
 					}
 					//回车
 					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
@@ -132,8 +131,6 @@ public class TicketWin32 {
 			FNWNS380 = User32.INSTANCE.FindWindow("FNWNS380", "证件信息录入窗口");
 		}
 		
-//		User32.INSTANCE.ShowWindow(FNWNS380, 9);
-//		User32.INSTANCE.SetForegroundWindow(FNWNS380);
 		
 		System.out.println("开始执行....");
 		System.out.println("姓名："+person.getName()+"，身份证："+person.getId());
@@ -144,6 +141,8 @@ public class TicketWin32 {
 		String cbText = Native.toString(cbTextChar);
 		while(comboBox != null && !cbText.equals("ED 二代                                        01")) {
 			comboBox = User32.INSTANCE.FindWindowEx(FNWNS380, comboBox, "ComboBox", null);
+			Win32.INSTANCE.SendMessage(comboBox, Win32.WM_GETTEXT, 255, cbTextChar);
+			cbText = Native.toString(cbTextChar);
 		}
 		HWND phWnd = Win32.INSTANCE.GetParent(comboBox);
 		//CB_SETCURSEL
@@ -257,12 +256,15 @@ public class TicketWin32 {
 		Win32.INSTANCE.SwitchToThisWindow(Notepad, true);
 		HWND edit = User32.INSTANCE.FindWindowEx(Notepad, null, "Edit", null);
 		
-		char[] a = "-IOQ".toCharArray();
+		char[] a = "9MOP深圳北".toCharArray();
 		for (char c : a) {
-			User32.INSTANCE.SendMessage(edit, User32.WM_CHAR, new WPARAM((byte)c), new LPARAM(0));
+			User32.INSTANCE.SendMessage(edit, User32.WM_CHAR, new WPARAM(c), new LPARAM(0));
 		}
 		
-		System.out.println((byte)'-');
+		System.out.println((byte)'9');
+		System.out.println((byte)'M');
+		System.out.println((byte)'O');
+		System.out.println((byte)'P');
 		/*String s = "C00185341";
 		if(s.matches("(^\\d{15}$)|(^\\d{18}$)|(^\\d{17}(\\d|X|x)$)"))
 			System.out.println("身份证");
