@@ -40,4 +40,6 @@ public interface Win32 extends StdCallLibrary {
 	
 	void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo);
 	
+	short GetKeyState(int nVirtKey);
+	
 }

@@ -35,9 +35,13 @@ public class AboutController implements Initializable {
 	@FXML
 	public Label lab_license;
 	
+	@FXML
+	public Label lab_info;
+	
 	@Override
 	public void initialize(URL location, ResourceBundle resources) {
 		txt_sn.setText(AppInfo.sn());
+		lab_info.setText(AppInfo.bit+"位  版本 "+AppInfo.verson);
 		renderLicense();
 		
 		importChooser.setTitle("选择许可文件");

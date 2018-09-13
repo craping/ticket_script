@@ -16,7 +16,7 @@
             <Font size="18.0" />
          </font>
       </Label>
-      <Label layoutX="139.0" layoutY="38.0" text="32位  版本 1.1.0" />
+      <Label fx:id="lab_info" layoutX="139.0" layoutY="38.0"/>
       <Label layoutX="21.0" layoutY="118.0" text="证书许可：" />
       <Label fx:id="lab_license" layoutX="88.0" layoutY="118.0" text="已过期" />
    </children>

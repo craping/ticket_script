@@ -1,20 +1,63 @@
 package ts.win32;
 
-import java.util.Arrays;
+import java.awt.Rectangle;
+import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
+import java.awt.image.DataBuffer;
+import java.awt.image.DataBufferInt;
+import java.awt.image.DirectColorModel;
+import java.awt.image.Raster;
+import java.awt.image.WritableRaster;
+import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
 
+import javax.imageio.ImageIO;
+
+import com.sun.jna.Memory;
 import com.sun.jna.Native;
+import com.sun.jna.platform.win32.GDI32;
 import com.sun.jna.platform.win32.User32;
+import com.sun.jna.platform.win32.Win32Exception;
+import com.sun.jna.platform.win32.WinDef.HBITMAP;
+import com.sun.jna.platform.win32.WinDef.HDC;
 import com.sun.jna.platform.win32.WinDef.HWND;
 import com.sun.jna.platform.win32.WinDef.LPARAM;
+import com.sun.jna.platform.win32.WinDef.RECT;
 import com.sun.jna.platform.win32.WinDef.WPARAM;
+import com.sun.jna.platform.win32.WinError;
+import com.sun.jna.platform.win32.WinGDI;
+import com.sun.jna.platform.win32.WinGDI.BITMAPINFO;
+import com.sun.jna.platform.win32.WinNT.HANDLE;
 
-import javafx.collections.transformation.FilteredList;
+import javafx.scene.control.Alert;
 import ts.entity.Person;
 import ts.entity.Train;
 
 public class TicketWin32 {
 	
-	public static boolean search(Train train) {
+	private static final DirectColorModel SCREENSHOT_COLOR_MODEL = new DirectColorModel(24, 0x00FF0000, 0xFF00, 0xFF);
+	private static final int[] SCREENSHOT_BAND_MASKS = {
+	        SCREENSHOT_COLOR_MODEL.getRedMask(),
+            SCREENSHOT_COLOR_MODEL.getGreenMask(),
+            SCREENSHOT_COLOR_MODEL.getBlueMask()
+	};
+	public static final Map<String, Character> SEAT_MAP = new HashMap<>();
+	static {
+		SEAT_MAP.put("商务座", '9');
+		SEAT_MAP.put("一等座", 'M');
+		SEAT_MAP.put("二等座", 'O');
+		SEAT_MAP.put("特等座", 'P');
+		
+		SEAT_MAP.put("硬座", '1');
+		SEAT_MAP.put("软座", '2');
+		SEAT_MAP.put("硬卧", '3');
+		SEAT_MAP.put("软卧", '4');
+		SEAT_MAP.put("硬座五座", 'W');
+		
+	}
+	
+	public static int search(Train train) {
 		HWND FNWNS380 = User32.INSTANCE.FindWindow("FNWNS380", "证件信息录入窗口");
 		if(FNWNS380 != null) {
 			User32.INSTANCE.SendMessage(FNWNS380, User32.WM_CLOSE, new WPARAM(0), new LPARAM(0));
@@ -22,12 +65,13 @@ public class TicketWin32 {
 		
 		HWND FNWND380 = User32.INSTANCE.FindWindow("FNWND380", null);
 		if(FNWND380 != null) {
-			FilteredList<Person> undo = train.getPersons().filtered(p -> p.getStatus().get(Arrays.toString(train.getNo())).get().equals("未执行"));
-			int ticketNum = undo.size() > 10?10:undo.size();
+			Win32.INSTANCE.SwitchToThisWindow(FNWND380, true);
+			
+			int total = ticketCount(FNWND380);
 			String[] dates = train.getDate();
 			String[] nos = train.getNo();
 			
-			search:for (String date : dates) {
+			for (String date : dates) {
 				
 				for (String no : nos) {
 					
@@ -57,67 +101,187 @@ public class TicketWin32 {
 						dateEdit = User32.INSTANCE.FindWindowEx(FNWNS380, dateEdit, "Edit", null);
 					}
 					//日期
-					Win32.INSTANCE.SwitchToThisWindow(dateEdit, true);
+					Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					Win32.INSTANCE.keybd_event((byte)'Q', (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+					Win32.INSTANCE.keybd_event((byte)'Q', (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+//					Win32.INSTANCE.SwitchToThisWindow(dateEdit, true);
 					Win32.INSTANCE.SendMessage(dateEdit, Win32.WM_SETTEXT, 0, date);
 					//回车
-					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
-					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+//					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+//					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
 					
-					//车次
+					
+					//F2
+					Win32.INSTANCE.keybd_event((byte)113, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
+					Win32.INSTANCE.keybd_event((byte)113, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					Win32.INSTANCE.SwitchToThisWindow(noEdit, true);
+					//车次
 					Win32.INSTANCE.SendMessage(noEdit, Win32.WM_SETTEXT, 0, no);
-					//回车
 					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					
+					//F3
+					Win32.INSTANCE.keybd_event((byte)114, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
+					Win32.INSTANCE.keybd_event((byte)114, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					//发站
-					Win32.INSTANCE.SwitchToThisWindow(fromEdit, true);
-					for (char c : train.getFrom().toCharArray()) {
-						User32.INSTANCE.SendMessage(fromEdit, User32.WM_CHAR, new WPARAM(c), new LPARAM(0));
-					}
-//					Win32.INSTANCE.SendMessage(fromEdit, WM_SETTEXT, 0, train.getFrom());
+					Win32.INSTANCE.SendMessage(fromEdit, Win32.WM_SETTEXT, 0, train.getFrom());
 					//回车
 					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					
+					//F4
+					Win32.INSTANCE.keybd_event((byte)115, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
+					Win32.INSTANCE.keybd_event((byte)115, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					//到站
-					Win32.INSTANCE.SwitchToThisWindow(toEdit, true);
-//					Win32.INSTANCE.SendMessage(toEdit, WM_SETTEXT, 0, train.getTo());
-					for (char c : train.getTo().toCharArray()) {
-						User32.INSTANCE.SendMessage(toEdit, User32.WM_CHAR, new WPARAM(c), new LPARAM(0));
-					}
+					Win32.INSTANCE.SendMessage(toEdit, Win32.WM_SETTEXT, 0, train.getTo());
 					//回车
 					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					
 					//票数
-					Win32.INSTANCE.SwitchToThisWindow(numEdit, true);
-					Win32.INSTANCE.SendMessage(numEdit, Win32.WM_SETTEXT, 0, String.valueOf(ticketNum));
+					Win32.INSTANCE.SendMessage(numEdit, Win32.WM_SETTEXT, 0, "1");
 					//回车
 					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					Win32.INSTANCE.keybd_event((byte)13, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
 					
-					try {
-						Thread.sleep(100);
-					} catch (InterruptedException e) {
+					//座位
+					Win32.INSTANCE.keybd_event((byte)SEAT_MAP.get(train.getSeat()).charValue(), (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+					try {Thread.sleep(50);} catch (InterruptedException e) {}
+					Win32.INSTANCE.keybd_event((byte)SEAT_MAP.get(train.getSeat()).charValue(), (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+					
+					while(true){
+						if(Thread.currentThread().isInterrupted())
+							return 0;
+						
+						HWND msgBox = User32.INSTANCE.FindWindow("#32770", "提示");
+						if(msgBox != null && User32.INSTANCE.IsWindowVisible(msgBox)) {
+							HWND s1 = User32.INSTANCE.FindWindowEx(msgBox, null, "Static", null);
+							HWND s2 = User32.INSTANCE.FindWindowEx(msgBox, s1, "Static", null);
+							char[] staticTextChar = new char[255];
+							Win32.INSTANCE.SendMessage(s2, Win32.WM_GETTEXT, 255, staticTextChar);
+							String staticText = Native.toString(staticTextChar);
+							
+							if(staticText.contains("票已售完")) {
+								HWND btn = User32.INSTANCE.FindWindowEx(msgBox, null, "Button", "否(&N)");
+								User32.INSTANCE.SendMessage(btn, Win32.BM_CLICK, new WPARAM(0), new LPARAM(0));
+								break;
+							}else if(staticText.contains("本次取票中有无座")) {
+								HWND btn = User32.INSTANCE.FindWindowEx(msgBox, null, "Button", "否(&N)");
+								User32.INSTANCE.SendMessage(btn, Win32.BM_CLICK, new WPARAM(0), new LPARAM(0));
+								break;
+							} else {
+								HWND btn = User32.INSTANCE.FindWindowEx(msgBox, null, "Button", null);
+								User32.INSTANCE.SendMessage(btn, Win32.BM_CLICK, new WPARAM(0), new LPARAM(0));
+								break;
+							}
+							
+						} else {
+							int num = ticketCount(FNWND380);
+							if(num > total)
+								return num - total;
+						}
 					}
-					
-					Win32.INSTANCE.keybd_event((byte)79, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
-					Win32.INSTANCE.keybd_event((byte)79, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
-					
-					break search;
 				}
 			}
+		}
+		return 1;
+	}
+	
+	public static int searchRepeat() {
+		HWND FNWND380 = User32.INSTANCE.FindWindow("FNWND380", null);
+		if(FNWND380 != null) {
+			Win32.INSTANCE.SwitchToThisWindow(FNWND380, true);
+			int total = ticketCount(FNWND380);
 			
+			//Esc 当前条件取票
+			Win32.INSTANCE.keybd_event((byte)27, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+			Win32.INSTANCE.keybd_event((byte)27, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
 			
-//			Win32.INSTANCE.SwitchToThisWindow(FNWND380, true);
-//			Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
-//			Win32.INSTANCE.keybd_event((byte)78, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
-//			Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
-//			Win32.INSTANCE.keybd_event((byte)78, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+			while(true){
+				if(Thread.currentThread().isInterrupted())
+					return 0;
+				
+				HWND msgBox = User32.INSTANCE.FindWindow("#32770", "提示");
+				if(msgBox != null && User32.INSTANCE.IsWindowVisible(msgBox)) {
+					HWND s1 = User32.INSTANCE.FindWindowEx(msgBox, null, "Static", null);
+					HWND s2 = User32.INSTANCE.FindWindowEx(msgBox, s1, "Static", null);
+					char[] staticTextChar = new char[255];
+					Win32.INSTANCE.SendMessage(s2, Win32.WM_GETTEXT, 255, staticTextChar);
+					String staticText = Native.toString(staticTextChar);
+					
+					if(staticText.contains("票已售完")) {
+						HWND btn = User32.INSTANCE.FindWindowEx(msgBox, null, "Button", "否(&N)");
+						User32.INSTANCE.SendMessage(btn, Win32.BM_CLICK, new WPARAM(0), new LPARAM(0));
+						break;
+					}else if(staticText.contains("本次取票中有无座")) {
+						HWND btn = User32.INSTANCE.FindWindowEx(msgBox, null, "Button", "否(&N)");
+						User32.INSTANCE.SendMessage(btn, Win32.BM_CLICK, new WPARAM(0), new LPARAM(0));
+						break;
+					} else {
+						HWND btn = User32.INSTANCE.FindWindowEx(msgBox, null, "Button", null);
+						User32.INSTANCE.SendMessage(btn, Win32.BM_CLICK, new WPARAM(0), new LPARAM(0));
+						break;
+					}
+					
+				} else {
+					int num = ticketCount(FNWND380);
+					if(num > total)
+						return num - total;
+				}
+			}
+		}
+		return 1;
+	}
+	
+	public static void pick() {
+		HWND FNWND380 = User32.INSTANCE.FindWindow("FNWND380", null);
+		if(FNWND380 != null) {
+			Win32.INSTANCE.SwitchToThisWindow(FNWND380, true);
+			
+			Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+			Win32.INSTANCE.keybd_event((byte)'N', (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+			
+			Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+			Win32.INSTANCE.keybd_event((byte)'N', (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+		}
+	}
+	
+	public static void clear() {
+		HWND FNWNS380 = User32.INSTANCE.FindWindow("FNWNS380", "证件信息录入窗口");
+		if(FNWNS380 != null) {
+			User32.INSTANCE.SendMessage(FNWNS380, User32.WM_CLOSE, new WPARAM(0), new LPARAM(0));
 		}
 		
-		return true;
+		HWND FNWND380 = User32.INSTANCE.FindWindow("FNWND380", null);
+		if(FNWND380 != null) {
+			Win32.INSTANCE.SwitchToThisWindow(FNWND380, true);
+			
+			Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+			Win32.INSTANCE.keybd_event((byte)'E', (byte)0, Win32.KEYEVENTF_KEYDOWN, 0);
+			
+			Win32.INSTANCE.keybd_event((byte)User32.VK_MENU, (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+			Win32.INSTANCE.keybd_event((byte)'E', (byte)0, Win32.KEYEVENTF_KEYUP, 0);
+			
+			while(ticketCount(FNWND380) != 0) {
+				if(Thread.currentThread().isInterrupted())
+					return;
+			}
+		}
 	}
 	
 	public static String print(Person person) {
@@ -250,21 +414,185 @@ public class TicketWin32 {
 		}
 	}
 	
-	public static void main(String[] args) throws Exception {
+	public static int ticketCount(HWND FNWND380) {
+		int num = 0;
+		if(FNWND380 != null) {
+			HWND pbdw = User32.INSTANCE.FindWindowEx(FNWND380, null, "pbdw80", null);
+			while(pbdw != null && !User32.INSTANCE.IsWindowVisible(pbdw)) {
+				pbdw = User32.INSTANCE.FindWindowEx(FNWND380, pbdw, "pbdw80", null);
+			}
 		
-		HWND Notepad = User32.INSTANCE.FindWindow("Notepad", "无标题 - 记事本");
-		Win32.INSTANCE.SwitchToThisWindow(Notepad, true);
-		HWND edit = User32.INSTANCE.FindWindowEx(Notepad, null, "Edit", null);
+			BufferedImage buffImage = getScreenshot(pbdw);
+			ColorModel cm = buffImage.getColorModel();
+			WritableRaster wr = buffImage.getRaster();
+			
+			for (int i = 0; i < 10; i++) {
+				if(cm.getRed(wr.getDataElements(0, i*36+18, null)) == 172)
+					num++;
+				else
+					break;
+			}
+		}
+		return num;
+	}
+	
+	public static BufferedImage getScreenshot(HWND target) {
+		RECT rect = new RECT();
+		if (!User32.INSTANCE.GetWindowRect(target, rect)) {
+			throw new Win32Exception(Native.getLastError());
+		}
+		Rectangle jRectangle = rect.toRectangle();
+		int windowWidth = 1;
+		int windowHeight = jRectangle.height-32;
 		
-		char[] a = "9MOP深圳北".toCharArray();
-		for (char c : a) {
-			User32.INSTANCE.SendMessage(edit, User32.WM_CHAR, new WPARAM(c), new LPARAM(0));
+		if (windowWidth == 0 || windowHeight == 0) {
+			throw new IllegalStateException("Window width and/or height were 0 even though GetWindowRect did not appear to fail.");
 		}
 		
-		System.out.println((byte)'9');
-		System.out.println((byte)'M');
-		System.out.println((byte)'O');
-		System.out.println((byte)'P');
+		HDC hdcTarget = User32.INSTANCE.GetDC(target);
+		if (hdcTarget == null) {
+			throw new Win32Exception(Native.getLastError());
+		}
+
+		Win32Exception we = null;
+
+		// device context used for drawing
+		HDC hdcTargetMem = null;
+
+		// handle to the bitmap to be drawn to
+		HBITMAP hBitmap = null;
+
+		// original display surface associated with the device context
+		HANDLE hOriginal = null;
+
+		// final java image structure we're returning.
+		BufferedImage image = null;
+		
+		try {
+			hdcTargetMem = GDI32.INSTANCE.CreateCompatibleDC(hdcTarget);
+			if (hdcTargetMem == null) {
+				throw new Win32Exception(Native.getLastError());
+			}
+
+			hBitmap = GDI32.INSTANCE.CreateCompatibleBitmap(hdcTarget, windowWidth, windowHeight);
+			if (hBitmap == null) {
+				throw new Win32Exception(Native.getLastError());
+			}
+
+			hOriginal = GDI32.INSTANCE.SelectObject(hdcTargetMem, hBitmap);
+			if (hOriginal == null) {
+				throw new Win32Exception(Native.getLastError());
+			}
+
+			// draw to the bitmap
+			if (!GDI32.INSTANCE.BitBlt(hdcTargetMem, 0, 0, windowWidth, windowHeight, hdcTarget, 0, 32, GDI32.SRCCOPY)) {
+				throw new Win32Exception(Native.getLastError());
+			}
+
+			BITMAPINFO bmi = new BITMAPINFO();
+			bmi.bmiHeader.biWidth = windowWidth;
+			bmi.bmiHeader.biHeight = -windowHeight;
+			bmi.bmiHeader.biPlanes = 1;
+			bmi.bmiHeader.biBitCount = 32;
+			bmi.bmiHeader.biCompression = WinGDI.BI_RGB;
+
+			Memory buffer = new Memory(windowWidth * windowHeight * 4);
+			int resultOfDrawing = GDI32.INSTANCE.GetDIBits(hdcTarget, hBitmap, 0, windowHeight, buffer, bmi,
+					WinGDI.DIB_RGB_COLORS);
+			if (resultOfDrawing == 0 || resultOfDrawing == WinError.ERROR_INVALID_PARAMETER) {
+				throw new Win32Exception(Native.getLastError());
+			}
+
+			int bufferSize = windowWidth * windowHeight;
+			DataBuffer dataBuffer = new DataBufferInt(buffer.getIntArray(0, bufferSize), bufferSize);
+			WritableRaster raster = Raster.createPackedRaster(dataBuffer, windowWidth, windowHeight, windowWidth,
+                                                              SCREENSHOT_BAND_MASKS, null);
+			image = new BufferedImage(SCREENSHOT_COLOR_MODEL, raster, false, null);
+
+		} catch (Win32Exception e) {
+			we = e;
+		} finally {
+			if (hOriginal != null) {
+				// per MSDN, set the display surface back when done drawing
+				HANDLE result = GDI32.INSTANCE.SelectObject(hdcTargetMem, hOriginal);
+				// failure modes are null or equal to HGDI_ERROR
+				if (result == null || WinGDI.HGDI_ERROR.equals(result)) {
+					Win32Exception ex = new Win32Exception(Native.getLastError());
+					if (we != null) {
+						ex.addSuppressed(we);
+					}
+					we = ex;
+				}
+			}
+
+			if (hBitmap != null) {
+				if (!GDI32.INSTANCE.DeleteObject(hBitmap)) {
+					Win32Exception ex = new Win32Exception(Native.getLastError());
+					if (we != null) {
+						ex.addSuppressed(we);
+					}
+					we = ex;
+				}
+			}
+
+			if (hdcTargetMem != null) {
+				// get rid of the device context when done
+				if (!GDI32.INSTANCE.DeleteDC(hdcTargetMem)) {
+					Win32Exception ex = new Win32Exception(Native.getLastError());
+					if (we != null) {
+						ex.addSuppressed(we);
+					}
+					we = ex;
+				}
+			}
+
+			if (hdcTarget != null) {
+				if (0 == User32.INSTANCE.ReleaseDC(target, hdcTarget)) {
+					throw new IllegalStateException("Device context did not release properly.");
+				}
+			}
+		}
+
+		if (we != null) {
+			throw we;
+		}
+		return image;
+	}
+	
+	public static void main(String[] args) throws Exception {
+		
+//		HWND hwnd = User32.INSTANCE.FindWindow("ImagePreviewWnd", "图片查看");
+		HWND hwnd = User32.INSTANCE.FindWindow("Notepad", "无标题 - 记事本");
+//		Win32.INSTANCE.SwitchToThisWindow(Notepad, true);
+//		File f =new File(System.getProperty("user.dir")+"/test.bmp");
+//		f.mkdirs();
+//		ImageIO.write(getScreenshot(hwnd),"bmp", f);
+		
+//		BufferedImage buffImage = ImageIO.read(new File("E:\\桌面\\ticket_script\\0.8105411285599603.bmp"));
+		
+		if(hwnd != null) {
+			BufferedImage buffImage = getScreenshot(hwnd);
+			ColorModel cm = buffImage.getColorModel();
+			WritableRaster wr = buffImage.getRaster();
+			
+			File f =new File(System.getProperty("user.dir")+"/test.bmp");
+			f.mkdirs();
+			ImageIO.write(buffImage,"bmp", f);
+			
+			int num = 0;
+			for (int i = 0; i < 10; i++) {
+				if(cm.getRed(wr.getDataElements(0, i*36+18+34, null)) == 172)
+					num++;
+				else
+					break;
+			}
+			System.out.println(num+"张");
+		}
+		while(true) {
+			Thread.sleep(50);
+			System.out.println(User32.INSTANCE.GetAsyncKeyState(User32.VK_CONTROL) & 0x8000);
+//			System.out.println(Win32.INSTANCE.GetKeyState(User32.VK_CONTROL));
+		}
 		/*String s = "C00185341";
 		if(s.matches("(^\\d{15}$)|(^\\d{18}$)|(^\\d{17}(\\d|X|x)$)"))
 			System.out.println("身份证");
@@ -275,64 +603,6 @@ public class TicketWin32 {
 		if(s.matches("^[0-9]{8}$") || s.matches("^[0-9]{10}$"))
 			System.out.println("台湾通行证");*/
 		
-		/*boolean visible = false,enabled = false;
-		while (true) {
-			HWND notify = User32.INSTANCE.FindWindow("#32770", "EditPlus");
-			boolean v = User32.INSTANCE.IsWindowVisible(notify);
-			if(v != visible) {
-				visible = v;
-				System.out.println(v);
-			}
-			boolean e = User32.INSTANCE.IsWindowEnabled(notify);
-			if(e != enabled) {
-				enabled = e;
-				System.out.println(e);
-			}
-		}*/
-//		HWND notify = User32.INSTANCE.FindWindow("#32770", "EditPlus");
-//		HWND n1 = User32.INSTANCE.FindWindowEx(notify, null, "Static", null);
-//		HWND n2 = User32.INSTANCE.FindWindowEx(notify, n1, "Static", null);
-//		char[] staticText = new char[255];
-//		Win32.INSTANCE.SendMessage(n2, WM_GETTEXT, 255, staticText);
-//		System.out.println(Native.toString(staticText));
-//		HWND btn = User32.INSTANCE.FindWindowEx(notify, null, "Button", "取消");
-//		User32.INSTANCE.SendMessage(btn, BM_CLICK, new WPARAM(0), new LPARAM(0));
 		
-		HWND hwnd = User32.INSTANCE.FindWindow("#32770", "Preferences");
-		HWND sub1 = User32.INSTANCE.FindWindowEx(hwnd, null, "#32770", null);
-		HWND sub2 = User32.INSTANCE.FindWindowEx(sub1, null, "#32770", null);
-		if(sub2 != null) {
-			HWND sub = User32.INSTANCE.FindWindowEx(sub2, null, "Edit", null);
-//			User32.INSTANCE.ShowWindow(hwnd, 9);
-//			User32.INSTANCE.SetForegroundWindow(hwnd);
-			Win32.INSTANCE.SwitchToThisWindow(sub, true);
-//			Win32.INSTANCE.keybd_event((byte)13, (byte)0, KEYEVENTF_KEYDOWN, 0);
-//			Win32.INSTANCE.keybd_event((byte)13, (byte)0, KEYEVENTF_KEYUP, 0);
-//			Win32.INSTANCE.SendMessage(sub, WM_SETTEXT, 0, Math.random()+"");
-			
-//			char[] charTitle = new char[255];
-//			User32.INSTANCE.GetWindowText(sub, charTitle, 255);
-//			System.out.println(Native.toString(charTitle));
-//			Win32.INSTANCE.SendMessage(sub, WM_GETTEXT, 255, charTitle);
-//			System.out.println(Native.toString(charTitle));
-//			
-//			sub = User32.INSTANCE.FindWindowEx(sub2, sub, "Edit", null);
-//			Win32.INSTANCE.SendMessage(sub, WM_SETTEXT, 0, Math.random()+"");
-			
-//			sub = User32.INSTANCE.FindWindowEx(sub2, null, "Button", "Open");
-//			User32.INSTANCE.SendMessage(sub, BM_CLICK, new WPARAM(0), new LPARAM(0));
-		}
-		
-		
-		/*HWND Notepad = User32.INSTANCE.FindWindow("Notepad", "无标题 - 记事本");
-//		User32.INSTANCE.ShowWindow(Notepad, 9);
-//		User32.INSTANCE.SetForegroundWindow(Notepad);
-		HWND edit = User32.INSTANCE.FindWindowEx(Notepad, null, "Edit", null);
-		char[] editText = new char[255];
-		User32.INSTANCE.SendMessage(edit, User32.WM_CHAR, new WPARAM(65), new LPARAM(0));
-//		Win32.INSTANCE.SendMessage(edit, WM_SETTEXT, 0, Math.random()+"");
-		Win32.INSTANCE.SendMessage(edit, WM_GETTEXT, 255, editText);
-		String text = Native.toString(editText);
-		System.out.println(text);*/
 	}
 }

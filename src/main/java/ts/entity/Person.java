@@ -3,10 +3,11 @@ package ts.entity;
 import java.util.HashMap;
 import java.util.Map;
 
-import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
 public class Person {
+	
+	private int cellIndex;
 	
 	private String id;
 	
@@ -17,16 +18,6 @@ public class Person {
 //	private final StringProperty status = new SimpleStringProperty("未执行");
 	
 	private Map<String, StringProperty> status = new HashMap<>();
-	
-	public Person() {
-		status.put("A", new SimpleStringProperty("未执行1"));
-		status.put("B", new SimpleStringProperty("未执行2"));
-	}
-
-	public Person(String id, String name) {
-		this.id = id;
-		this.name = name;
-	}
 
 	public String getId() {
 		return id;
@@ -58,6 +49,14 @@ public class Person {
 
 	public void setStatus(Map<String, StringProperty> status) {
 		this.status = status;
+	}
+
+	public int getCellIndex() {
+		return cellIndex;
+	}
+
+	public void setCellIndex(int cellIndex) {
+		this.cellIndex = cellIndex;
 	}
 
 	/*public String getStatus() {

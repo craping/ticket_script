@@ -17,6 +17,7 @@ import javax.swing.filechooser.FileSystemView;
 import org.apache.poi.EncryptedDocumentException;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
+import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.Row;
@@ -24,6 +25,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.util.StringUtil;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import com.sun.jna.Pointer;
@@ -42,7 +44,6 @@ import javafx.beans.property.StringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ListChangeListener.Change;
-import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -50,7 +51,6 @@ import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
@@ -75,7 +75,6 @@ import ts.entity.Ticket;
 import ts.entity.Train;
 import ts.win32.KeyHook;
 import ts.win32.TicketWin32;
-import ts.win32.Win32;
 
 public class Controller implements Initializable {
 	
@@ -159,7 +158,7 @@ public class Controller implements Initializable {
 				String suffix = name.substring(name.lastIndexOf(".") + 1);
 				return suffix.equals("xls") || suffix.equals("xlsx");
 			}).collect(Collectors.toList());
-			importFiles(files);
+			importFiles(files, (User32.INSTANCE.GetAsyncKeyState(User32.VK_CONTROL) & 0x8000) != 0);
 		});
 		
 		new Thread(new KeyHook(new LowLevelKeyboardProc() {
@@ -171,7 +170,7 @@ public class Controller implements Initializable {
                     case WinUser.WM_KEYDOWN:
 //                    case WinUser.WM_SYSKEYUP:
                     case WinUser.WM_SYSKEYDOWN:
-                        System.err.println("in callback, key=" + info.vkCode);
+//                        System.err.println("in callback, key=" + info.vkCode);
                         if (info.vkCode == 35) {
                             System.err.println("exit");
                             User32.INSTANCE.UnhookWindowsHookEx(KeyHook.hhk);
@@ -240,28 +239,85 @@ public class Controller implements Initializable {
 			btn_start.setText("停止");
 			
 			scritpThread = new Thread(() -> {
-				try {
+				loop : while(true) {
+					if(Thread.currentThread().isInterrupted())
+						break;
+					
+					int remain = 0;
+					for (Train train : trains) {
+						FilteredList<Person> undo = train.getPersons().filtered(p -> !"".equals(p.getId()) && !"".equals(p.getName()) && p.getStatus().get(Arrays.toString(train.getNo())).get().equals("未执行"));
+						remain += undo.size();
+					}
+					
+					if(remain == 0)
+						break;
 					
 					for (Train train : trains) {
+						
 						if(Thread.currentThread().isInterrupted())
-							break;
-						if(TicketWin32.search(train)) {
+							break loop;
+						
+						FilteredList<Person> undo = train.getPersons().filtered(p -> !"".equals(p.getId()) && !"".equals(p.getName()) && p.getStatus().get(Arrays.toString(train.getNo())).get().equals("未执行"));
+						if(undo.size() > 0) {
+							//取出票总数
+							int total = 0;
+							//当前取票数
+							int pick = 0;
 							
-							FilteredList<Person> filterData = train.getPersons()
-									.filtered(person -> !"".equals(person.getId()) && !"".equals(person.getName()) && person.getStatus().get(Arrays.toString(train.getNo())).get().equals("未执行"));
-							for (Person person : filterData) {
-								
+							int limit = 5;
+							TicketWin32.clear();
+							
+							for (int i = 0; true; i++) {
 								if(Thread.currentThread().isInterrupted())
-									break;
+									break loop;
 								
-								Thread.sleep(1000);
-								person.getStatus().get(Arrays.toString(train.getNo())).set("成功");
-	//							person.getStatus().get(Arrays.toString(train.getNo())).set(TicketWin32.print(person));
+								if(i == 0) {
+									total += pick = TicketWin32.search(train);
+								} else {
+									total += pick = TicketWin32.searchRepeat();
+								}
+								
+								//有取到过票且当前无票 || 取票达到上限
+								if((pick == 0 && total != 0)  || total >= (undo.size() < limit?undo.size():limit)) {
+									
+									TicketWin32.pick();
+									int execute = 0;
+									
+									for (Person person : undo) {
+										if(Thread.currentThread().isInterrupted())
+											break loop;
+										
+										if(execute == total)
+											break;
+										
+										if(person.getStatus().get(Arrays.toString(train.getNo())).get().equals("未执行")) {
+											String status = "成功";
+											person.getStatus().get(Arrays.toString(train.getNo())).set("执行中");
+											try {
+												Thread.sleep(1000);
+											} catch (InterruptedException e) {
+//												e.printStackTrace();
+												scritpThread.interrupt();
+											}
+//											String status = TicketWin32.print(person);
+											person.getStatus().get(Arrays.toString(train.getNo())).set(status);
+											
+											if(!status.equals("未执行"))
+												execute ++;
+										}
+									}
+									
+									total = 0;
+									undo = undo.filtered(p -> p.getStatus().get(Arrays.toString(train.getNo())).get().equals("未执行"));
+								}
+								
+								if(undo.size() == 0 || pick == 0) {
+									TicketWin32.clear();
+									break;
+								}
 							}
 						}
 					}
-				} catch (InterruptedException e) {
-					e.printStackTrace();
 				}
 				Platform.runLater(() -> {
 					btn_start.setText("开始");
@@ -284,14 +340,31 @@ public class Controller implements Initializable {
 		
 		System.out.println(lastImportFile.getAbsolutePath());
 		
-		importFiles(Arrays.asList(lastImportFile));
+		importFiles(Arrays.asList(lastImportFile), false);
 	}
 	
-	private void importFiles(List<File> files) {
-		vbox.getChildren().clear();
-		trains.clear();
-		tickets.clear();
-		tables.clear();
+	public void appendImportFile(ActionEvent event) {
+		if(lastImportFile != null && lastImportFile.isFile())
+			importChooser.setInitialDirectory(lastImportFile.getParentFile());
+		
+		lastImportFile = importChooser.showOpenDialog(stage);
+		if(lastImportFile == null)
+			return;
+		
+		System.out.println(lastImportFile.getAbsolutePath());
+		
+		importFiles(Arrays.asList(lastImportFile), true);
+	}
+	
+	private void importFiles(List<File> files, boolean append) {
+		
+		if(!append) {
+			vbox.getChildren().clear();
+			trains.clear();
+			tickets.clear();
+			tables.clear();
+		}
+		
 		files.forEach(file -> {
 			FileInputStream fis = null;
 			try {
@@ -303,18 +376,23 @@ public class Controller implements Initializable {
 				Person person = null;
 				
 				for (Row row : sheet) {
+					Cell firstCell = row.getCell(0);
+					if(firstCell == null || firstCell.getCellTypeEnum() == CellType.BLANK || firstCell.getCellTypeEnum() == CellType._NONE)
+						break;
+					
 					row.forEach(cell -> {
 						cell.setCellType(CellType.STRING);
 					});
-					String firstCell = row.getCell(0).getStringCellValue().trim();
-					if(Character.isDigit(firstCell.charAt(0))) {
+					
+					String firstCellValue = firstCell.getStringCellValue().trim();
+					if(Character.isDigit(firstCellValue.charAt(0))) {
 						
 						if(person != null) {
 							ticket = new Ticket();
 						}
 						
 						Train train = new Train();
-						train.setDate(firstCell.split(","));
+						train.setDate(firstCellValue.split(","));
 						train.setNo(row.getCell(1).getStringCellValue().trim().split(","));
 						train.setFrom(row.getCell(2).getStringCellValue().trim());
 						train.setTo(row.getCell(3).getStringCellValue().trim());
@@ -344,15 +422,15 @@ public class Controller implements Initializable {
 							table.getColumns().add(col_type);
 							
 							ticket.getTrains().forEach(t -> {
+								
 								TableColumn<Person, String> col_status = new TableColumn<>("车次"+Arrays.toString(t.getNo()));
 								col_status.setCellValueFactory(param -> param.getValue().getStatus().get(Arrays.toString(t.getNo())));
 								col_status.setCellFactory(new Callback<TableColumn<Person,String>, TableCell<Person,String>>() {
-									
 									@Override
 									public TableCell<Person, String> call(TableColumn<Person, String> param) {
-										
-										return new TableCell<Person, String>() {
-							                @Override protected void updateItem(String item, boolean empty) {
+										TableCell<Person, String> cell = new TableCell<Person, String>() {
+							                @Override 
+							                protected void updateItem(String item, boolean empty) {
 							                    if (item == getItem()) return;
 							                    super.updateItem(item, empty);
 							                    
@@ -360,15 +438,32 @@ public class Controller implements Initializable {
 							                        super.setText(null);
 							                        super.setGraphic(null);
 							                    } else {
-							                    	if(!item.equals("成功"))
+							                    	if(item.equals("成功")) {
+							                    		setStyle("");
+							                    		setTextFill(Color.web("#28A745"));
+							                    	} else if(item.equals("未执行")) {
+							                    		setStyle("");
+								                    	setTextFill(Color.web("#3399EA"));
+							                    	} else if(item.equals("执行中")) {
+							                    		setStyle("-fx-background-color:#28A745");
+							                    		setTextFill(Color.web("#FFFFFF"));
+							                    		/*double y = getParent().getParent().getParent().getParent().getParent().getParent().getParent().getParent().getBoundsInParent().getMaxY();
+							                    		double height = scroll.getContent().getBoundsInLocal().getHeight();
+							                    		double diffY = getParent().getBoundsInParent().getMaxY();
+							                    		System.out.println(y);
+							                    		System.out.println(getParent().getBoundsInParent().getMaxY());
+							                    		System.out.println((y-diffY)/height);
+							                    		scroll.setVvalue(y/height);*/
+							                    	} else {
+							                    		setStyle("");
 								                    	setTextFill(Color.web("#DC3545"));
-								                    else
-								                    	setTextFill(Color.web("#28A745"));
+							                    	}
 							                        super.setText(item);
 							                        super.setGraphic(null);
 							                    }
 							                }
 							            };
+							            return cell;
 									}
 								});
 								table.getColumns().add(col_status);
@@ -454,7 +549,6 @@ public class Controller implements Initializable {
 	
 	private void exportFile(File file) {
 		String prefix = file.getName().substring(file.getName().lastIndexOf(".")+1);
-		ObservableList<Person> data = table.getItems();
 		try {
 			@SuppressWarnings("resource")
 			Workbook book = prefix.equals("xls")?new HSSFWorkbook():new XSSFWorkbook();
@@ -472,20 +566,50 @@ public class Controller implements Initializable {
 	        row.createCell(2).setCellStyle(style);
 	        row.createCell(2).setCellValue("状态");
 	        
-	        
-	        for (int i = 0; i < data.size(); i++) {
-	        	Person person = data.get(i);
-	        	Row dataRow = sheet.createRow(i+1);
-	        	dataRow.createCell(0).setCellStyle(style);
-	        	dataRow.createCell(0).setCellValue(person.getId());
-		 
-	        	dataRow.createCell(1).setCellStyle(style);
-	        	dataRow.createCell(1).setCellValue(person.getName());
-		        
-	        	dataRow.createCell(2).setCellStyle(style);
-//	        	dataRow.createCell(2).setCellValue(person.getStatus());
+	        int rownum = 0;
+        	for(Ticket ticket : tickets) {
+        		
+        		for(Train train :ticket.getTrains()) {
+        			Row dataRow = sheet.createRow(rownum);
+        			dataRow.createCell(0).setCellStyle(style);
+    	        	dataRow.createCell(0).setCellValue(StringUtil.join(train.getDate(), ","));
+    	        	
+    	        	dataRow.createCell(1).setCellStyle(style);
+    	        	dataRow.createCell(1).setCellValue(StringUtil.join(train.getNo(), ","));
+    	        	
+    	        	dataRow.createCell(2).setCellStyle(style);
+    	        	dataRow.createCell(2).setCellValue(train.getFrom());
+    	        	
+    	        	dataRow.createCell(3).setCellStyle(style);
+    	        	dataRow.createCell(3).setCellValue(train.getTo());
+    	        	
+    	        	dataRow.createCell(4).setCellStyle(style);
+    	        	dataRow.createCell(4).setCellValue(train.getSeat());
+        			rownum ++;
+	        	}
+        		
+        		for(Person person : ticket.getPersons()) {
+        			Row dataRow = sheet.createRow(rownum);
+        			dataRow.createCell(0).setCellStyle(style);
+    	        	dataRow.createCell(0).setCellValue(person.getName());
+    	        	
+    	        	dataRow.createCell(1).setCellStyle(style);
+    	        	dataRow.createCell(1).setCellValue(person.getId());
+    	        	
+    	        	int n = 2;
+    	        	for (String key : person.getStatus().keySet()) {
+    	        		StringProperty sp = person.getStatus().get(key);
+    	        		dataRow.createCell(n).setCellStyle(style);
+        	        	dataRow.createCell(n).setCellValue(key+":"+sp.get());
+        	        	n++;
+					}
+        			rownum ++;
+        		}
+        	}
+        	
+        	for (int i = 0; i < 5; i++) {
+        		sheet.autoSizeColumn(i);
 			}
-	        
 	        book.setSheetName(0, "结果");
 	        
             FileOutputStream fos = new FileOutputStream(file);
@@ -524,13 +648,18 @@ public class Controller implements Initializable {
 	}
 	
 	public void test(ActionEvent event) {
-		HWND Notepad = User32.INSTANCE.FindWindow("Notepad", "无标题 - 记事本");
-		Win32.INSTANCE.SwitchToThisWindow(Notepad, true);
-		HWND edit = User32.INSTANCE.FindWindowEx(Notepad, null, "Edit", null);
-		
-		char[] a = "9MOP深圳北".toCharArray();
-		for (char c : a) {
-			User32.INSTANCE.SendMessage(edit, User32.WM_CHAR, new WPARAM(c), new LPARAM(0));
+		HWND FNWND380 = User32.INSTANCE.FindWindow("FNWND380", null);
+		if(FNWND380 != null) {
+			int num = TicketWin32.ticketCount(FNWND380);
+			Alert alert = new Alert(Alert.AlertType.INFORMATION);
+			alert.setTitle("票数");
+			alert.setHeaderText(num+"张");
+			alert.showAndWait();
+			System.out.println(num+"张");
 		}
+		double width = scroll.getContent().getBoundsInLocal().getWidth();
+        double height = scroll.getContent().getBoundsInLocal().getHeight();
+        System.out.println(width);
+        System.out.println(height);
 	}
 }

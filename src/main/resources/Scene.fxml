@@ -17,6 +17,7 @@
           <Menu mnemonicParsing="false" text="文件">
             <items>
               <MenuItem mnemonicParsing="false" onAction="#openImportFile" text="打开" />
+                  <MenuItem mnemonicParsing="false" onAction="#appendImportFile" text="添加" />
                   <MenuItem mnemonicParsing="false" onAction="#openExportFile" text="导出" />
             </items>
           </Menu>
